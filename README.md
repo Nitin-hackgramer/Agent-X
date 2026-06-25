@@ -58,8 +58,20 @@ uv run python nodes/generate.py
 uv run python nodes/approval.py    # terminal edit+approve self-check
 ```
 
+## Scheduler
+
+`scheduler_setup.py` registers Windows Task Scheduler jobs (`schtasks`) that run `main.py` 5 min before the best X engagement windows (default 9am/12pm/5pm, override with `TWEET_BEST_TIMES=08:00,13:30,19:00`):
+
+```bash
+uv run python scheduler_setup.py install   # set up daily jobs
+uv run python scheduler_setup.py remove    # tear down
+```
+
+## Approval follow-ups
+
+If you don't reply within 2 minutes, the bot nags every 10s on Telegram until you `y`/`n`/`e` — no giving up.
+
 ## Ideas not built yet
 
-- **Daily reminder**: schedule `main.py` via OS cron / Task Scheduler to ping you a fresh tweet each morning.
 - **Dedup**: skip items already in `approved_tweets.md` so you don't see repeats.
 - **Auto-post to Mastodon** (genuinely free API) if you want hands-off publishing.

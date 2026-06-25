@@ -10,6 +10,7 @@ load_dotenv()
 
 POLL_TIMEOUT_SECONDS = 120
 POLL_INTERVAL_SECONDS = 3
+FOLLOWUP_INTERVAL_SECONDS = 10  # nag cadence once the initial 2-min window lapses
 SAVE_PATH = "approved_tweets.md"
 
 HELP = "Reply: y approve · n <reason> reject · e <old>|<new> edit (or e <full new text>)"
@@ -50,30 +51,52 @@ def _parse_cmd(text):
     return cmd, arg
 
 
+def _poll_until(base, chat_id, draft, last_update_id, deadline, poll_interval):
+    while time.time() < deadline:
+        resp = httpx.get(
+            f"{base}/getUpdates",
+            params={"offset": last_update_id, "timeout": poll_interval},
+            timeout=poll_interval + 10,
+        ).json()
+        for update in resp.get("result", []):
+            last_update_id = update["update_id"] + 1
+            cmd, arg = _parse_cmd(update.get("message", {}).get("text", ""))
+            if cmd == "y":
+                return "approved", None, draft, last_update_id
+            if cmd == "n":
+                return "rejected", arg or "no reason given", draft, last_update_id
+            if cmd == "e":
+                draft = _apply_edit(draft, arg)
+                _send(base, chat_id, draft, edited=True)
+                deadline = time.time() + POLL_TIMEOUT_SECONDS  # reset timer after an edit
+    return None, None, draft, last_update_id
+
+
 def _telegram_approval(draft, token, chat_id):
     base = f"https://api.telegram.org/bot{token}"
     last_update_id = _latest_update_id(base)
     _send(base, chat_id, draft)
 
     deadline = time.time() + POLL_TIMEOUT_SECONDS
-    while time.time() < deadline:
-        resp = httpx.get(
-            f"{base}/getUpdates",
-            params={"offset": last_update_id, "timeout": POLL_INTERVAL_SECONDS},
-            timeout=POLL_INTERVAL_SECONDS + 10,
-        ).json()
-        for update in resp.get("result", []):
-            last_update_id = update["update_id"] + 1
-            cmd, arg = _parse_cmd(update.get("message", {}).get("text", ""))
-            if cmd == "y":
-                return "approved", None, draft
-            if cmd == "n":
-                return "rejected", arg or "no reason given", draft
-            if cmd == "e":
-                draft = _apply_edit(draft, arg)
-                _send(base, chat_id, draft, edited=True)
-                deadline = time.time() + POLL_TIMEOUT_SECONDS  # reset timer after an edit
-    return "rejected", "approval timed out", draft
+    status, feedback, draft, last_update_id = _poll_until(
+        base, chat_id, draft, last_update_id, deadline, POLL_INTERVAL_SECONDS
+    )
+    if status:
+        return status, feedback, draft
+
+    # ponytail: no reply in 2 min -> nag every 10s until they answer, no cap
+    while True:
+        httpx.post(f"{base}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": f"⏰ Still waiting on this tweet:\n<code>{html.escape(draft)}</code>\n\n{html.escape(HELP)}",
+            "parse_mode": "HTML",
+        })
+        deadline = time.time() + FOLLOWUP_INTERVAL_SECONDS
+        status, feedback, draft, last_update_id = _poll_until(
+            base, chat_id, draft, last_update_id, deadline, FOLLOWUP_INTERVAL_SECONDS
+        )
+        if status:
+            return status, feedback, draft
 
 
 def _terminal_approval(draft):
