@@ -62,8 +62,10 @@ def _poll_until(base, chat_id, draft, last_update_id, deadline, poll_interval):
             last_update_id = update["update_id"] + 1
             cmd, arg = _parse_cmd(update.get("message", {}).get("text", ""))
             if cmd == "y":
+                httpx.post(f"{base}/sendMessage", json={"chat_id": chat_id, "text": "✅ Approved, saving."})
                 return "approved", None, draft, last_update_id
             if cmd == "n":
+                httpx.post(f"{base}/sendMessage", json={"chat_id": chat_id, "text": f"❌ Rejected: {arg or 'no reason given'}. Re-researching."})
                 return "rejected", arg or "no reason given", draft, last_update_id
             if cmd == "e":
                 draft = _apply_edit(draft, arg)

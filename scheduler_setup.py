@@ -3,9 +3,13 @@ peak-engagement times on X (so you get the Telegram prompt in time to approve
 and post right at the good slot).
 
 Times are the commonly-cited best-engagement windows for X (weekdays):
-9am, 12pm (noon), 5pm local time. ponytail: hardcoded, no "research" module —
-these are stable industry-standard slots, not something to compute at runtime.
-Override via TWEET_BEST_TIMES env var, e.g. "08:00,13:30,19:00".
+9am, 12pm (noon), 5pm, 7pm, 9pm local time. ponytail: hardcoded, no "research"
+module — these are stable industry-standard slots, not something to compute
+at runtime. Override via TWEET_BEST_TIMES env var, e.g. "08:00,13:30,19:00".
+
+schtasks /st always uses the machine's local timezone (no UTC conversion
+happens anywhere in this file) — set Windows' timezone to yours and the
+times below are exactly when you'll be pinged.
 
 Usage:
     uv run python scheduler_setup.py install
@@ -16,7 +20,7 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 
-DEFAULT_TIMES = ["09:00", "12:00", "17:00"]
+DEFAULT_TIMES = ["09:00", "12:00", "17:00", "19:00", "21:00"]
 TASK_PREFIX = "TwitterAgent_"
 
 
